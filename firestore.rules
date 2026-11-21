@@ -1,0 +1,572 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() >= 5
+        && request.auth.token.email.size() <= 160
+        && request.auth.token.email_verified == true;
+    }
+
+    function userEmailKey() {
+      return request.auth.token.email.lower();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidEmailId(id) {
+      return id is string
+        && id.size() >= 5
+        && id.size() <= 160
+        && id.matches('^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]{2,}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Bootstrapped Super Admin (immutable root owner)
+    function isSuperAdmin() {
+      return isVerifiedEmail() && userEmailKey() == 'dinhlong.tran932@gmail.com';
+    }
+
+    // Trusted RBAC lookup from /appUsers/{normalizedEmail}
+    function hasActiveAppUser() {
+      return isVerifiedEmail()
+        && exists(/databases/$(database)/documents/appUsers/$(userEmailKey()))
+        && get(/databases/$(database)/documents/appUsers/$(userEmailKey())).data.status == 'active';
+    }
+
+    function currentAppUser() {
+      return get(/databases/$(database)/documents/appUsers/$(userEmailKey())).data;
+    }
+
+    function isAdmin() {
+      return isSuperAdmin()
+        || (hasActiveAppUser() && currentAppUser().role == 'admin');
+    }
+
+    function isManagerOrAdmin() {
+      return isAdmin()
+        || (hasActiveAppUser() && currentAppUser().role == 'manager');
+    }
+
+    function isAuthorizedUser() {
+      return isSuperAdmin() || hasActiveAppUser();
+    }
+
+    function canManageWork() {
+      return isAdmin()
+        || (hasActiveAppUser() && currentAppUser().canManageWork == true);
+    }
+
+    function canManageLocations() {
+      return isAdmin()
+        || (hasActiveAppUser() && currentAppUser().canManageLocations == true);
+    }
+
+    function canViewContacts() {
+      return isAdmin()
+        || (hasActiveAppUser() && currentAppUser().canViewContacts == true);
+    }
+
+    function canManageContacts() {
+      return isAdmin()
+        || (hasActiveAppUser() && currentAppUser().canViewContacts == true && currentAppUser().canManageContacts == true);
+    }
+
+    // Relational FK existence checks
+    function locationExists(locId) {
+      return isValidId(locId)
+        && exists(/databases/$(database)/documents/locations/$(locId));
+    }
+
+    function locationExistsOrEmpty(locId) {
+      return locId == '' || locationExists(locId);
+    }
+
+    function contactExistsOrEmpty(contactId) {
+      return contactId == ''
+        || (
+          isValidId(contactId)
+          && exists(/databases/$(database)/documents/contacts/$(contactId))
+        );
+    }
+
+    function tripExists(tripId) {
+      return isValidId(tripId)
+        && exists(/databases/$(database)/documents/travelTrips/$(tripId));
+    }
+
+    function tripExistsAfter(tripId) {
+      return isValidId(tripId)
+        && existsAfter(/databases/$(database)/documents/travelTrips/$(tripId));
+    }
+
+    function tripOwnerId(tripId) {
+      return get(/databases/$(database)/documents/travelTrips/$(tripId)).data.ownerId;
+    }
+
+    // --- Validation Blueprints (Synchronized with firebase-blueprint.json) ---
+    function isValidAppUser(data, emailKey) {
+      return data.keys().hasAll([
+          'email', 'displayName', 'role', 'status', 'department', 'notes',
+          'canManageWork', 'canManageLocations', 'canViewContacts', 'canManageContacts',
+          'canUseAI', 'canPrintReports', 'uid', 'lastLoginIso', 'createdBy',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'email', 'displayName', 'role', 'status', 'department', 'notes',
+          'canManageWork', 'canManageLocations', 'canViewContacts', 'canManageContacts',
+          'canUseAI', 'canPrintReports', 'uid', 'lastLoginIso', 'createdBy',
+          'createdAt', 'updatedAt'
+        ])
+        && data.email is string && isValidEmailId(data.email) && data.email == emailKey
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.role is string && data.role in ['admin', 'manager', 'staff', 'viewer']
+        && data.status is string && data.status in ['active', 'suspended']
+        && data.department is string && data.department.size() <= 120
+        && data.notes is string && data.notes.size() <= 500
+        && data.canManageWork is bool
+        && data.canManageLocations is bool
+        && data.canViewContacts is bool
+        && data.canManageContacts is bool
+        && data.canUseAI is bool
+        && data.canPrintReports is bool
+        && data.uid is string && data.uid.size() <= 128 && (data.uid == '' || isValidId(data.uid))
+        && data.lastLoginIso is string && data.lastLoginIso.size() <= 40
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLocation(data) {
+      return data.keys().hasAll(['ownerId', 'code', 'name', 'address', 'category', 'notes', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'code', 'name', 'address', 'category', 'notes', 'createdAt', 'updatedAt'])
+        && data.ownerId is string && isValidId(data.ownerId)
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 32 && data.code.matches('^[A-Za-z0-9_\\-/\\.]+$')
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 160
+        && data.address is string && data.address.size() >= 1 && data.address.size() <= 300
+        && data.category is string && data.category in ['office', 'agency', 'client', 'site', 'personal']
+        && data.notes is string && data.notes.size() <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWorkItem(data) {
+      return data.keys().hasAll([
+          'ownerId', 'itemType', 'code', 'title', 'projectCode', 'projectName',
+          'locationId', 'contactId', 'scheduledDate', 'startTime', 'endTime',
+          'priority', 'status', 'reminderMinutes', 'reminderDismissed', 'notes',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'itemType', 'code', 'title', 'projectCode', 'projectName',
+          'locationId', 'contactId', 'scheduledDate', 'startTime', 'endTime',
+          'priority', 'status', 'reminderMinutes', 'reminderDismissed', 'notes',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && isValidId(data.ownerId)
+        && data.itemType is string && data.itemType in ['task', 'project', 'invitation']
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 48 && data.code.matches('^[A-Za-z0-9_\\-/\\.]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 220
+        && data.projectCode is string && data.projectCode.size() <= 48
+        && data.projectName is string && data.projectName.size() <= 160
+        && data.locationId is string && isValidId(data.locationId)
+        && data.contactId is string && data.contactId.size() <= 128
+        && data.scheduledDate is string && data.scheduledDate.size() == 10 && data.scheduledDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.startTime is string && data.startTime.size() == 5 && data.startTime.matches('^[0-2][0-9]:[0-5][0-9]$')
+        && data.endTime is string && data.endTime.size() == 5 && data.endTime.matches('^[0-2][0-9]:[0-5][0-9]$')
+        && data.priority is string && data.priority in ['low', 'medium', 'high', 'urgent']
+        && data.status is string && data.status in ['pending', 'in_progress', 'completed', 'cancelled']
+        && data.reminderMinutes is number && data.reminderMinutes >= 0 && data.reminderMinutes <= 10080
+        && data.reminderDismissed is bool
+        && data.notes is string && data.notes.size() <= 1500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidContact(data) {
+      return data.keys().hasAll([
+          'ownerId', 'code', 'fullName', 'group', 'relationship', 'organization',
+          'phone', 'email', 'locationId', 'address', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'code', 'fullName', 'group', 'relationship', 'organization',
+          'phone', 'email', 'locationId', 'address', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && isValidId(data.ownerId)
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 32 && data.code.matches('^[A-Za-z0-9_\\-/\\.]+$')
+        && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120
+        && data.group is string && data.group in ['client', 'family', 'partner', 'colleague', 'other']
+        && data.relationship is string && data.relationship.size() <= 120
+        && data.organization is string && data.organization.size() <= 160
+        && data.phone is string && data.phone.size() <= 32
+        && data.email is string && data.email.size() <= 160
+        && data.locationId is string && data.locationId.size() <= 128
+        && data.address is string && data.address.size() <= 300
+        && data.notes is string && data.notes.size() <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserSettings(data) {
+      return data.keys().hasAll([
+          'ownerId', 'ownerTitle', 'organizationHeader', 'defaultPaperSize',
+          'privacyMaskEnabled', 'soundAlertEnabled', 'pinHash', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'ownerTitle', 'organizationHeader', 'defaultPaperSize',
+          'privacyMaskEnabled', 'soundAlertEnabled', 'pinHash', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && isValidId(data.ownerId) && data.ownerId == request.auth.uid
+        && data.ownerTitle is string && data.ownerTitle.size() <= 120
+        && data.organizationHeader is string && data.organizationHeader.size() <= 180
+        && data.defaultPaperSize is string && data.defaultPaperSize in ['A4_portrait', 'A4_landscape', 'A3_portrait', 'A3_landscape', 'A5_portrait']
+        && data.privacyMaskEnabled is bool
+        && data.soundAlertEnabled is bool
+        && data.pinHash is string && data.pinHash.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTravelTrip(data) {
+      return data.keys().hasAll([
+          'ownerId', 'code', 'title', 'startDate', 'endDate', 'status',
+          'transportSummary', 'travelers', 'budgetNote', 'notes',
+          'stopCount', 'routePreview', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'code', 'title', 'startDate', 'endDate', 'status',
+          'transportSummary', 'travelers', 'budgetNote', 'notes',
+          'stopCount', 'routePreview', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && isValidId(data.ownerId)
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 48 && data.code.matches('^[A-Za-z0-9_\\-/\\.]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.startDate is string && data.startDate.size() == 10 && data.startDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.endDate is string && data.endDate.size() == 10 && data.endDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.status is string && data.status in ['planned', 'ongoing', 'completed', 'cancelled']
+        && data.transportSummary is string && data.transportSummary.size() <= 160
+        && data.travelers is string && data.travelers.size() <= 200
+        && data.budgetNote is string && data.budgetNote.size() <= 200
+        && data.notes is string && data.notes.size() <= 1500
+        && data.stopCount is number && data.stopCount >= 0 && data.stopCount <= 200
+        && data.routePreview is string && data.routePreview.size() <= 300
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTravelStop(data, tripId) {
+      return data.keys().hasAll([
+          'ownerId', 'tripId', 'orderIndex', 'locationId', 'locationCode',
+          'stopDate', 'arrivalTime', 'activityDurationMinutes', 'departureTime',
+          'transportMode', 'activityTitle', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'tripId', 'orderIndex', 'locationId', 'locationCode',
+          'stopDate', 'arrivalTime', 'activityDurationMinutes', 'departureTime',
+          'transportMode', 'activityTitle', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerId is string && isValidId(data.ownerId)
+        && data.tripId is string && isValidId(data.tripId) && data.tripId == tripId
+        && data.orderIndex is number && data.orderIndex >= 1 && data.orderIndex <= 200
+        && data.locationId is string && isValidId(data.locationId)
+        && data.locationCode is string && data.locationCode.size() >= 1 && data.locationCode.size() <= 32 && data.locationCode.matches('^[A-Za-z0-9_\\-/\\.]+$')
+        && data.stopDate is string && data.stopDate.size() == 10 && data.stopDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.arrivalTime is string && data.arrivalTime.size() == 5 && data.arrivalTime.matches('^[0-2][0-9]:[0-5][0-9]$')
+        && data.activityDurationMinutes is number && data.activityDurationMinutes >= 0 && data.activityDurationMinutes <= 10080
+        && data.departureTime is string && data.departureTime.size() == 5 && data.departureTime.matches('^[0-2][0-9]:[0-5][0-9]$')
+        && data.transportMode is string && data.transportMode in ['car', 'flight', 'train', 'bus', 'motorbike', 'boat', 'walk', 'other']
+        && data.activityTitle is string && data.activityTitle.size() <= 200
+        && data.notes is string && data.notes.size() <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection: /appUsers/{emailKey} (Admin RBAC Registry) ---
+    match /appUsers/{emailKey} {
+      allow get: if isVerifiedEmail()
+        && isValidEmailId(emailKey)
+        && (emailKey == userEmailKey() || isAdmin());
+
+      allow list: if isAdmin();
+
+      allow create: if isAdmin()
+        && isValidEmailId(emailKey)
+        && isValidAppUser(incoming(), emailKey)
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          emailKey != 'dinhlong.tran932@gmail.com'
+          || (isSuperAdmin() && incoming().role == 'admin' && incoming().status == 'active')
+        );
+
+      allow update: if isVerifiedEmail()
+        && isValidEmailId(emailKey)
+        && isValidAppUser(incoming(), emailKey)
+        && incoming().email == existing().email
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'role', 'status', 'department', 'notes',
+              'canManageWork', 'canManageLocations', 'canViewContacts',
+              'canManageContacts', 'canUseAI', 'canPrintReports', 'updatedAt'
+            ])
+            && (
+              emailKey != 'dinhlong.tran932@gmail.com'
+              || (isSuperAdmin() && incoming().role == 'admin' && incoming().status == 'active')
+            )
+          )
+          ||
+          (
+            emailKey == userEmailKey()
+            && existing().status == 'active'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['uid', 'lastLoginIso', 'updatedAt'])
+            && incoming().uid == request.auth.uid
+            && (existing().uid == '' || existing().uid == request.auth.uid)
+          )
+        );
+
+      allow delete: if isAdmin()
+        && isValidEmailId(emailKey)
+        && emailKey != 'dinhlong.tran932@gmail.com';
+    }
+
+    // --- Collection: /locations/{locationId} ---
+    match /locations/{locationId} {
+      allow get: if isAuthorizedUser() && isValidId(locationId);
+      allow list: if isAuthorizedUser();
+      allow create: if canManageLocations()
+        && isValidId(locationId)
+        && isValidLocation(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if canManageLocations()
+        && isValidId(locationId)
+        && isValidLocation(incoming())
+        && (isManagerOrAdmin() || existing().ownerId == request.auth.uid)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['code', 'name', 'address', 'category', 'notes', 'updatedAt']);
+      allow delete: if canManageLocations()
+        && isValidId(locationId)
+        && (isManagerOrAdmin() || existing().ownerId == request.auth.uid);
+    }
+
+    // --- Collection: /workItems/{workItemId} ---
+    match /workItems/{workItemId} {
+      allow get: if isAuthorizedUser() && isValidId(workItemId);
+      allow list: if isAuthorizedUser();
+      allow create: if canManageWork()
+        && isValidId(workItemId)
+        && isValidWorkItem(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && locationExists(incoming().locationId)
+        && contactExistsOrEmpty(incoming().contactId);
+      allow update: if isAuthorizedUser()
+        && isValidId(workItemId)
+        && isValidWorkItem(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            canManageWork()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reminderDismissed', 'updatedAt'])
+          )
+          ||
+          (
+            canManageWork()
+            && (isManagerOrAdmin() || existing().ownerId == request.auth.uid)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'itemType', 'code', 'title', 'projectCode', 'projectName',
+              'locationId', 'contactId', 'scheduledDate', 'startTime', 'endTime',
+              'priority', 'status', 'reminderMinutes', 'reminderDismissed', 'notes', 'updatedAt'
+            ])
+            && locationExists(incoming().locationId)
+            && contactExistsOrEmpty(incoming().contactId)
+          )
+        );
+      allow delete: if canManageWork()
+        && isValidId(workItemId)
+        && (isManagerOrAdmin() || existing().ownerId == request.auth.uid);
+    }
+
+    // --- Collection: /contacts/{contactId} (PII Isolated to Permitted Roles) ---
+    match /contacts/{contactId} {
+      allow get: if canViewContacts() && isValidId(contactId);
+      allow list: if canViewContacts();
+      allow create: if canManageContacts()
+        && isValidId(contactId)
+        && isValidContact(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && locationExistsOrEmpty(incoming().locationId);
+      allow update: if canManageContacts()
+        && isValidId(contactId)
+        && isValidContact(incoming())
+        && (isManagerOrAdmin() || existing().ownerId == request.auth.uid)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'code', 'fullName', 'group', 'relationship', 'organization',
+          'phone', 'email', 'locationId', 'address', 'notes', 'updatedAt'
+        ])
+        && locationExistsOrEmpty(incoming().locationId);
+      allow delete: if canManageContacts()
+        && isValidId(contactId)
+        && (isManagerOrAdmin() || existing().ownerId == request.auth.uid);
+    }
+
+    // --- Collection: /travelTrips/{tripId} & Subcollection /stops/{stopId} ---
+    match /travelTrips/{tripId} {
+      allow get: if isAuthorizedUser() && isValidId(tripId);
+      allow list: if isAuthorizedUser();
+      allow create: if canManageWork()
+        && isValidId(tripId)
+        && isValidTravelTrip(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isAuthorizedUser()
+        && isValidId(tripId)
+        && isValidTravelTrip(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1 (Tier 2): Status toggle or atomic route summary sync when stops change
+          (
+            canManageWork()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'stopCount', 'routePreview', 'updatedAt'])
+          )
+          ||
+          // Action 2 (Tier 1): Admin, Manager, or Creator full trip metadata edit
+          (
+            canManageWork()
+            && (isManagerOrAdmin() || existing().ownerId == request.auth.uid)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'code', 'title', 'startDate', 'endDate', 'status',
+              'transportSummary', 'travelers', 'budgetNote', 'notes',
+              'stopCount', 'routePreview', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if canManageWork()
+        && isValidId(tripId)
+        && (isManagerOrAdmin() || existing().ownerId == request.auth.uid);
+
+      // Subcollection: /travelTrips/{tripId}/stops/{stopId} (Master Gate + Location FK)
+      match /stops/{stopId} {
+        allow get: if isAuthorizedUser()
+          && isValidId(tripId)
+          && isValidId(stopId)
+          && tripExists(tripId);
+        allow list: if isAuthorizedUser() && isValidId(tripId);
+        allow create: if canManageWork()
+          && isValidId(tripId)
+          && isValidId(stopId)
+          && isValidTravelStop(incoming(), tripId)
+          && incoming().ownerId == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && tripExistsAfter(tripId)
+          && locationExists(incoming().locationId);
+        allow update: if isAuthorizedUser()
+          && isValidId(tripId)
+          && isValidId(stopId)
+          && isValidTravelStop(incoming(), tripId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().tripId == existing().tripId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && tripExists(tripId)
+          && locationExists(incoming().locationId)
+          && (
+            // Action 1 (Tier 2): Reorder sequence index
+            (
+              canManageWork()
+              && incoming().diff(existing()).affectedKeys().hasOnly(['orderIndex', 'updatedAt'])
+            )
+            ||
+            // Action 2 (Tier 1): Admin, Manager, Stop Creator, or Trip Owner full stop edit
+            (
+              canManageWork()
+              && (isManagerOrAdmin() || existing().ownerId == request.auth.uid || tripOwnerId(tripId) == request.auth.uid)
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'orderIndex', 'locationId', 'locationCode', 'stopDate',
+                'arrivalTime', 'activityDurationMinutes', 'departureTime',
+                'transportMode', 'activityTitle', 'notes', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if canManageWork()
+          && isValidId(tripId)
+          && isValidId(stopId)
+          && tripExists(tripId)
+          && (isManagerOrAdmin() || existing().ownerId == request.auth.uid || tripOwnerId(tripId) == request.auth.uid);
+      }
+    }
+
+    // --- Collection: /userSettings/{userId} (Strictly Private Per-User) ---
+    match /userSettings/{userId} {
+      allow get: if isAuthorizedUser()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && (resource == null || existing().ownerId == request.auth.uid);
+      allow list: if false;
+      allow create: if isAuthorizedUser()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidUserSettings(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isAuthorizedUser()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidUserSettings(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'ownerTitle', 'organizationHeader', 'defaultPaperSize',
+          'privacyMaskEnabled', 'soundAlertEnabled', 'pinHash', 'updatedAt'
+        ]);
+      allow delete: if isAuthorizedUser()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && existing().ownerId == request.auth.uid;
+    }
+  }
+}

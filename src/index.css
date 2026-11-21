@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+}
+
+.font-mono-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-safe {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+/* Receipt / Dot-matrix script aesthetic on screen */
+.receipt-paper-sheet {
+  background-color: #fcfbf7;
+  color: #111827;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+}
+
+.receipt-serrated-top {
+  height: 10px;
+  background-image:
+    linear-gradient(135deg, #f8fafc 50%, transparent 50%),
+    linear-gradient(225deg, #f8fafc 50%, transparent 50%);
+  background-size: 12px 10px;
+  background-repeat: repeat-x;
+}
+
+.receipt-serrated-bottom {
+  height: 10px;
+  background-image:
+    linear-gradient(315deg, #f8fafc 50%, transparent 50%),
+    linear-gradient(45deg, #f8fafc 50%, transparent 50%);
+  background-size: 12px 10px;
+  background-repeat: repeat-x;
+}
+
+.tractor-feed-strip {
+  width: 28px;
+  background-color: #f6f4ee;
+  background-image: radial-gradient(circle at center, #cbd5e1 4.5px, transparent 5px);
+  background-size: 28px 24px;
+  background-repeat: repeat-y;
+}
+
+/* Dedicated print layout styling for A4, A3, A5, K80, K58 and dot-matrix sheets */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only-container {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    transform: none !important;
+  }
+
+  .receipt-paper-sheet {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .print-break-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

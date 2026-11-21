@@ -1,0 +1,687 @@
+{
+  "entities": {
+    "Location": {
+      "title": "Location",
+      "description": "Dedicated table for location codes, names, and addresses linked to work items and contacts.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the single personal owner."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z0-9_\\-/\\.]+$",
+          "description": "Location code (e.g., DD-001, VP-HN)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Name of the location or venue."
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "Full street address."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["office", "agency", "client", "site", "personal"],
+          "description": "Classification of the location."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional directions, floor/room info, or notes."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": ["ownerId", "code", "name", "address", "category", "notes", "createdAt", "updatedAt"]
+    },
+    "WorkItem": {
+      "title": "WorkItem",
+      "description": "Tasks, projects, and invitation notices linked relationally to locations and contacts.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the single personal owner."
+        },
+        "itemType": {
+          "type": "string",
+          "enum": ["task", "project", "invitation"],
+          "description": "Type of work record: task, project, or invitation."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48,
+          "pattern": "^[A-Za-z0-9_\\-/\\.]+$",
+          "description": "Task code, project code, or invitation number."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220,
+          "description": "Title of task, project, or invitation."
+        },
+        "projectCode": {
+          "type": "string",
+          "maxLength": 48,
+          "description": "Optional project code for project-based reporting aggregation."
+        },
+        "projectName": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Optional project name for reporting."
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Foreign key referencing /locations/{locationId}."
+        },
+        "contactId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional foreign key referencing /contacts/{contactId}, or empty string."
+        },
+        "scheduledDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "Scheduled date in YYYY-MM-DD format."
+        },
+        "startTime": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+          "description": "Start time in HH:mm format."
+        },
+        "endTime": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+          "description": "End time in HH:mm format."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "urgent"],
+          "description": "Priority level."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed", "cancelled"],
+          "description": "Current execution state."
+        },
+        "reminderMinutes": {
+          "type": "number",
+          "description": "Minutes before startTime to trigger reminder (0 to 10080)."
+        },
+        "reminderDismissed": {
+          "type": "boolean",
+          "description": "Whether the reminder notification has been dismissed."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1500,
+          "description": "Detailed notes, agenda, or invitation particulars."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "ownerId",
+        "itemType",
+        "code",
+        "title",
+        "projectCode",
+        "projectName",
+        "locationId",
+        "contactId",
+        "scheduledDate",
+        "startTime",
+        "endTime",
+        "priority",
+        "status",
+        "reminderMinutes",
+        "reminderDismissed",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "Personal CRM and directory for clients, relatives, partners, and relationships (PII isolated to owner).",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the single personal owner."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z0-9_\\-/\\.]+$",
+          "description": "Contact code (e.g., LH-001)."
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Full name of the contact."
+        },
+        "group": {
+          "type": "string",
+          "enum": ["client", "family", "partner", "colleague", "other"],
+          "description": "Relationship category."
+        },
+        "relationship": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Role, title, or personal relation description."
+        },
+        "organization": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Company or agency name."
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Phone number (PII)."
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Email address (PII)."
+        },
+        "locationId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional foreign key referencing /locations/{locationId}, or empty string."
+        },
+        "address": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Personal address if different from linked location (PII)."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Notes on preferences, birthday, or interaction history."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "ownerId",
+        "code",
+        "fullName",
+        "group",
+        "relationship",
+        "organization",
+        "phone",
+        "email",
+        "locationId",
+        "address",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Private personal preferences, vault PIN hash, privacy mode, and print header configuration.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the single personal owner."
+        },
+        "ownerTitle": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Owner display title for printed schedules."
+        },
+        "organizationHeader": {
+          "type": "string",
+          "maxLength": 180,
+          "description": "Header line for printed schedules and notices."
+        },
+        "defaultPaperSize": {
+          "type": "string",
+          "enum": ["A4_portrait", "A4_landscape", "A3_portrait", "A3_landscape", "A5_portrait"],
+          "description": "Default paper size for schedule printing."
+        },
+        "privacyMaskEnabled": {
+          "type": "boolean",
+          "description": "Mask sensitive phone numbers and addresses on screen."
+        },
+        "soundAlertEnabled": {
+          "type": "boolean",
+          "description": "Play chime on upcoming schedule reminders."
+        },
+        "pinHash": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional SHA-256 hash of local quick-lock PIN, or empty string."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "ownerId",
+        "ownerTitle",
+        "organizationHeader",
+        "defaultPaperSize",
+        "privacyMaskEnabled",
+        "soundAlertEnabled",
+        "pinHash",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "Authorized application user account with RBAC role, granular permissions, and active/suspended status managed exclusively by admins.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 160,
+          "pattern": "^[a-z0-9._%+\\-]+@[a-z0-9.\\-]+\\.[a-z]{2,}$",
+          "description": "Normalized lowercase Google account email matching document ID."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name of the user."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "manager", "staff", "viewer"],
+          "description": "RBAC role controlling access tier."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "suspended"],
+          "description": "Account activation status; suspended users are blocked immediately."
+        },
+        "department": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Optional department, team, or relationship label."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Admin notes regarding user scope or permissions."
+        },
+        "canManageWork": {
+          "type": "boolean",
+          "description": "Permission to create/edit/delete work items, projects, and invitations."
+        },
+        "canManageLocations": {
+          "type": "boolean",
+          "description": "Permission to create/edit/delete master location records."
+        },
+        "canViewContacts": {
+          "type": "boolean",
+          "description": "Permission to view private contacts directory (PII)."
+        },
+        "canManageContacts": {
+          "type": "boolean",
+          "description": "Permission to create/edit/delete contacts (PII)."
+        },
+        "canUseAI": {
+          "type": "boolean",
+          "description": "Permission to invoke AI data entry and AI report summaries."
+        },
+        "canPrintReports": {
+          "type": "boolean",
+          "description": "Permission to view analytics reports and print A4/A3 schedules."
+        },
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Firebase Auth UID linked automatically upon user sign-in, or empty string prior to first sign-in."
+        },
+        "lastLoginIso": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "ISO timestamp string of most recent user login, or empty string."
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the admin who added this user."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of user creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "email",
+        "displayName",
+        "role",
+        "status",
+        "department",
+        "notes",
+        "canManageWork",
+        "canManageLocations",
+        "canViewContacts",
+        "canManageContacts",
+        "canUseAI",
+        "canPrintReports",
+        "uid",
+        "lastLoginIso",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TravelTrip": {
+      "title": "TravelTrip",
+      "description": "Travel itinerary header managed by trip code, supporting unlimited N* trips with relational links to ordered stops.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the creator."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48,
+          "pattern": "^[A-Za-z0-9_\\-/\\.]+$",
+          "description": "Trip code (e.g., DL-2026-01, DL-DALAT)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Trip name or itinerary title."
+        },
+        "startDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "Trip start date in YYYY-MM-DD format."
+        },
+        "endDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "Trip end date in YYYY-MM-DD format."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["planned", "ongoing", "completed", "cancelled"],
+          "description": "Current trip status."
+        },
+        "transportSummary": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Primary transport summary (e.g., car, flight, train)."
+        },
+        "travelers": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Participants or group composition."
+        },
+        "budgetNote": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Optional budget or cost notes."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1500,
+          "description": "General trip notes and checklist."
+        },
+        "stopCount": {
+          "type": "number",
+          "description": "Cached count of itinerary stops (0 to 200)."
+        },
+        "routePreview": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Compact location-code chain preview (e.g., DD-HCM01 → DD-PT02 → DD-DL03)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "ownerId",
+        "code",
+        "title",
+        "startDate",
+        "endDate",
+        "status",
+        "transportSummary",
+        "travelers",
+        "budgetNote",
+        "notes",
+        "stopCount",
+        "routePreview",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TravelStop": {
+      "title": "TravelStop",
+      "description": "Sequential stop (A → B → C → ... → N) inside a travel trip, linked to /locations via locationId and locationCode, tracking arrival time, activity duration, and departure time.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the creator."
+        },
+        "tripId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent /travelTrips/{tripId} document ID."
+        },
+        "orderIndex": {
+          "type": "number",
+          "description": "1-based sequence index in the trip route (1 to 200)."
+        },
+        "locationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Foreign key referencing /locations/{locationId}."
+        },
+        "locationCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z0-9_\\-/\\.]+$",
+          "description": "Location code linked from /locations."
+        },
+        "stopDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "Date at this stop in YYYY-MM-DD format."
+        },
+        "arrivalTime": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+          "description": "Arrival time at this stop in HH:mm format."
+        },
+        "activityDurationMinutes": {
+          "type": "number",
+          "description": "Duration of activity/stay at this stop in minutes (0 to 10080)."
+        },
+        "departureTime": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 5,
+          "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+          "description": "Departure time leaving this stop to the next point in HH:mm format."
+        },
+        "transportMode": {
+          "type": "string",
+          "enum": ["car", "flight", "train", "bus", "motorbike", "boat", "walk", "other"],
+          "description": "Transport mode from this stop to the next stop."
+        },
+        "activityTitle": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Main activity or plan at this stop."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Detailed stop notes, tickets, or travel reminders."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "ownerId",
+        "tripId",
+        "orderIndex",
+        "locationId",
+        "locationCode",
+        "stopDate",
+        "arrivalTime",
+        "activityDurationMinutes",
+        "departureTime",
+        "transportMode",
+        "activityTitle",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/locations/{locationId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "Master location directory (code, name, address) accessible to authorized workspace users and managed according to RBAC permissions."
+    },
+    "/workItems/{workItemId}": {
+      "schema": { "$ref": "#/entities/WorkItem" },
+      "description": "Tasks, projects, and invitation records linked relationally to /locations and optionally /contacts."
+    },
+    "/contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/Contact" },
+      "description": "Private directory of clients, family, and partners (PII) strictly restricted to admins and users granted canViewContacts/canManageContacts."
+    },
+    "/userSettings/{userId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "Per-user private security preferences, PIN lock hash, privacy toggles, and printing defaults."
+    },
+    "/appUsers/{emailKey}": {
+      "schema": { "$ref": "#/entities/AppUser" },
+      "description": "Admin-managed user registry and RBAC permission directory keyed by normalized lowercase Google email."
+    },
+    "/travelTrips/{tripId}": {
+      "schema": { "$ref": "#/entities/TravelTrip" },
+      "description": "Travel trips managed by trip code, each containing an ordered subcollection of N itinerary stops."
+    },
+    "/travelTrips/{tripId}/stops/{stopId}": {
+      "schema": { "$ref": "#/entities/TravelStop" },
+      "description": "Ordered travel stops (A → B → C → ... → N) linked relationally to /locations via locationId and locationCode."
+    }
+  }
+}

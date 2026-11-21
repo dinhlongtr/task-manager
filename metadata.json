@@ -1,0 +1,8 @@
+{
+  "name": "Sổ Tay Công Tác",
+  "description": "Ứng dụng quản lý công việc, lịch trình hằng ngày, địa điểm, danh bạ và báo cáo cá nhân với đồng bộ đám mây thời gian thực và nhập liệu thông minh bằng AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
